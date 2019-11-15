@@ -1,0 +1,89 @@
+---
+- name: Quiz install wordpress in serverx
+  hosts: serverx.example.com
+  gather_facts: false
+  remote_user: root
+  vars:
+   ansible_password: redhat
+  tasks:
+  - yum:
+     name:
+      - httpd
+      - mariadb
+      - mariadb-server
+      - php
+      - php-common
+      - php-mysql
+      - php-mysql 
+      - php-gd 
+      - php-xml 
+      - php-mbstring
+      - php-mcrypt 
+      - php-xmlrpc 
+      - unzip 
+      - wget
+     state: present
+  - service:
+     name: httpd
+     state: started
+     enabled: yes
+  - service:
+     name: mariadb
+     state: started
+     enabled: yes
+  - firewalld:
+     service: http
+     permanent: yes
+     state: enabled
+     immediate: yes
+  - name: Set mysql root password
+    block:
+     - shell: mysqladmin password "abc"
+    rescue:
+     - debug:
+        msg: "Already set password"
+  - name: Copy sql script to serverx
+    copy:
+     src: script.sql
+     dest: /tmp/script.sql
+  - name: Run sql script
+    shell: mysql -uroot -p"abc" < /tmp/script.sql   
+  - name: Download wordpress
+    get_url:
+     url: https://wordpress.org/wordpress-5.0.tar.gz
+     dest: /tmp/wordpress-5.0.tar.gz
+  - name: Unarchive wordpress.gz
+    unarchive:
+     src: /tmp/wordpress-5.0.tar.gz
+     dest: /var/www/html/
+     remote_src: yes
+  - name: Change owner and permissions
+    file:
+     path: /var/www/html/wordpress
+     owner: apache
+     group: apache
+     mode: 0755
+     recurse: yes
+  - name: Create wp-content dir
+    file:
+     path: /var/www/html/wordpress/wp-content/uploads
+     state: directory
+     owner: apache
+     group: apache
+     recurse: yes
+  - name: Move wp-config
+    copy:
+     remote_src: yes
+     src: /var/www/html/wordpress/wp-config-sample.php
+     dest: /var/www/html/wordpress/wp-config.php
+  - name: lineinfile wp-config   
+    lineinfile:
+     path: /var/www/html/wordpress/wp-config.php
+     backup: yes
+     regexp: "{{ item.regexp }}"
+     line: "{{ item.line }}"
+    loop:
+     - { regexp: 'DB_NAME', line: "define('DB_NAME', 'wordpress');" }
+     - { regexp: 'DB_USER', line: "define('DB_USER', 'ansible');" }
+     - { regexp: 'DB_PASSWORD', line: "define('DB_PASSWORD', 'mypassword');" }
+     - { regexp: 'DB_HOST', line: "define('DB_HOST', 'localhost');" }
